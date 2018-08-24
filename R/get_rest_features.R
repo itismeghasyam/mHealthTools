@@ -1,4 +1,4 @@
-#' Extract tremor features from raw accelerometer and gyroscope data.
+#' Extract rest features from raw accelerometer and gyroscope data.
 #'
 #' @param accelerometer_data A data frame with columns t, x, y, z containing 
 #' accelerometer measurements. 
@@ -7,16 +7,16 @@
 #' @param gravity_data A data frame with columns t, x, y, z containing 
 #' gravity sensor measurements.
 #' @param funs A list of feature extraction functions that accept a single
-#' numeric vector as input.
+#' numeric vector as input. Passing NA will extract the default features 
+#' (time_domain_summary, frequency_domain_summary, frequency_domain_energy).
 #' @param window_length Length of sliding windows.
 #' @param time_range Timestamp range to use.
 #' @param frequency_range Frequency range for the bandpass filter.
 #' @param overlap Window overlap.
-#' @return Tremor features indexed by axis and window.
+#' @return Rest features indexed by axis and window.
 #' @export
 #' @author Thanneer Malai Perumal, Meghasyam Tummalacherla, Phil Snyder
-#' @importFrom magrittr "%>%"
-get_tremor_features <- function(
+get_rest_features <- function(
   accelerometer_data, gyroscope_data, gravity_data = NA,
   funs = NA, window_length = 256, time_range = c(1,9),
   frequency_range = c(1, 25), overlap = 0.5) {

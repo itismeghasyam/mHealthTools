@@ -1,4 +1,4 @@
-#' Extract tremor features from raw accelerometer and gyroscope data.
+#' Extract kinetic tremor features from raw accelerometer and gyroscope data.
 #'
 #' @param accelerometer_data A data frame with columns t, x, y, z containing 
 #' accelerometer measurements. 
@@ -12,15 +12,18 @@
 #' @param time_range Timestamp range to use.
 #' @param frequency_range Frequency range for the bandpass filter.
 #' @param overlap Window overlap.
-#' @return Tremor features indexed by axis and window.
+#' @param max_imf Number of intrinsic mode functions to use for 
+#' empirical mode decomposition.
+#' @return Kinetic tremor features indexed by axis, window, and IMF.
 #' @export
 #' @author Thanneer Malai Perumal, Meghasyam Tummalacherla, Phil Snyder
-#' @importFrom magrittr "%>%"
-get_tremor_features <- function(
+get_kinetic_tremor_features <- function(
   accelerometer_data, gyroscope_data, gravity_data = NA,
-  funs = NA, window_length = 256, time_range = c(1,9),
-  frequency_range = c(1, 25), overlap = 0.5) {
+  funs = NA, window_length = 256, time_range = c(1,9), 
+  frequency_range = c(1, 25), overlap = 0.5, max_imf = 4) {
+  
   features = dplyr::tibble(Window = NA, error = NA)
+  
   # check input integrity
   if (any(is.na(accelerometer_data))) {
     features$error = 'Malformed accelerometer data'
@@ -32,11 +35,12 @@ get_tremor_features <- function(
   
   # Get accelerometer features
   features_accel <- accelerometer_features(
-    sensor_data = accelerometer_data, 
-    transformation = transformation_window(window_length = window_length,
-                                           overlap = overlap),
+    sensor_data = accelerometer_data,
+    transformation = transformation_imf_window(window_length = window_length,
+                                               overlap = overlap,
+                                               max_imf = max_imf),
     funs = funs,
-    groups = c("axis", "Window"),
+    groups = c("axis", "IMF", "Window"),
     window_length = window_length,
     overlap = overlap,
     time_range = time_range,
@@ -45,10 +49,11 @@ get_tremor_features <- function(
   # Get gyroscope features
   features_gyro <- gyroscope_features(
     sensor_data = gyroscope_data,
-    transformation = transformation_window(window_length = window_length,
-                                           overlap = overlap),
+    transformation = transformation_imf_window(window_length = window_length,
+                                               overlap = overlap,
+                                               max_imf = max_imf),
     funs = funs,
-    groups = c("axis", "Window"),
+    groups = c("axis", "IMF", "Window"),
     window_length = window_length,
     overlap = overlap,
     time_range = time_range,
@@ -74,4 +79,4 @@ get_tremor_features <- function(
   }
   
   return(features)
-}
+}  
