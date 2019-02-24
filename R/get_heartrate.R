@@ -43,6 +43,9 @@ get_heartrate <- function(heartrate_data, window_length = 10, window_overlap = 0
   # Convert window length from seconds to samples
   window_length <- round(sampling_rate * window_length)
   mean_filter_order <- 65
+  if(sampling_rate <= 32){
+    mean_filter_order <- 33
+    }
   
   ##  Apply pre-processing filter to all heartrate data
   
@@ -118,15 +121,15 @@ get_filtered_signal <- function(x, sampling_rate, mean_filter_order = 65, method
   ## Elliptic IIR filter design (For 60Hz Sampling Rate)
   ## We chose an Elliptic IIR, since it is an equi-ripple filter
   #################
-  if(sampling_rate > 20){
+  if(sampling_rate > 32){
     
     bandpass_params <- signal::ellipord(Wp = c(0.5/30,10/30), 
                                         Ws = c(0.3/30, 12/30),
                                         Rp = 0.001,
                                         Rs = 0.001)
   }else{
-    bandpass_params <- signal::ellipord(Wp = c(0.5/15,10/15), 
-                                        Ws = c(0.3/15, 12/15),
+    bandpass_params <- signal::ellipord(Wp = c(1/15,8/15), 
+                                        Ws = c(0.5/15, 10/15),
                                         Rp = 0.001,
                                         Rs = 0.001)
   }
@@ -222,10 +225,11 @@ get_hr_from_time_series <- function(x, sampling_rate, method = 'acf', min_hr = 4
     confidence <- NA
   }
   
+  
   # If hr or condidence is NaN, then return hr = 0 and confidence = 0
-  if (is.na(confidence) || is.na(hr)) {
-    confidence <- NA
-    hr <- NA
+  if ((length(hr) == 0) || is.null(hr)) {
+  confidence <- NA
+  hr <- NA
   }
   
   return(c(hr, confidence))
