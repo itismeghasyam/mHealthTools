@@ -126,12 +126,12 @@ get_filtered_signal <- function(x, sampling_rate, mean_filter_order = 65, method
     bandpass_params <- signal::ellipord(Wp = c(0.5/30,10/30), 
                                         Ws = c(0.3/30, 12/30),
                                         Rp = 0.001,
-                                        Rs = 0.001)
+                                        Rs = 0.1)
   }else{
-    bandpass_params <- signal::ellipord(Wp = c(1/15,8/15), 
-                                        Ws = c(0.5/15, 10/15),
+    bandpass_params <- signal::ellipord(Wp = c(0.4/15,8/15), 
+                                        Ws = c(0.2/15, 10/15),
                                         Rp = 0.001,
-                                        Rs = 0.001)
+                                        Rs = 0.1)
   }
   # If this doesn't work, use the one below
   # bandpass_params <- signal::ellipord(Wp = c(0.5/30,4/30),
