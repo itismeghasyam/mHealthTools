@@ -156,7 +156,7 @@ get_filtered_signal <- function(x, sampling_rate, mean_filter_order = 65, method
   bandpass_filter <- suppressWarnings(signal::ellip(bandpass_params))
   
   x <- signal::filter(bandpass_filter, x)
-  x <- x[180:length(x)] # 180 samples is 3s @ 60Hz
+  x <- x[round(3*sampling_rate):length(x)] # 180 samples is 3s @ 60Hz
   y <- x
   
   #################
