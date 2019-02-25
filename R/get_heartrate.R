@@ -33,7 +33,7 @@ get_heartrate <- function(heartrate_data, window_length = 10, window_overlap = 0
   
   heartrate_error_frame <- data.frame(red = NA, green = NA, blue = NA,
                                       error = NA, sampling_rate = NA)
-  sampling_rate <- get_sampling_rate(heartrate_data)
+  sampling_rate <- mhealthtools:::get_sampling_rate(heartrate_data)
   if (is.infinite(sampling_rate) || is.na(sampling_rate)) {
     heartrate_error_frame$error <- paste("Sampling Rate calculated from timestamp is Inf",
                                          "or NaN / timestamp not found in json")
@@ -45,7 +45,10 @@ get_heartrate <- function(heartrate_data, window_length = 10, window_overlap = 0
   mean_filter_order <- 65
   if(sampling_rate <= 32){
     mean_filter_order <- 33
-    }
+  }
+  if(sampling_rate <= 17){
+    mean_filter_order <- 17
+  }
   
   ##  Apply pre-processing filter to all heartrate data
   
@@ -73,7 +76,7 @@ get_heartrate <- function(heartrate_data, window_length = 10, window_overlap = 0
     heartrate_data %>%
       dplyr::select(red, green, blue) %>%
       na.omit() %>%
-      lapply(window_signal, window_length, window_overlap, 'rectangle')
+      lapply(mhealthtools:::window_signal, window_length, window_overlap, 'rectangle')
   }, error = function(e) { NA })
   if (all(is.na(heartrate_data))) {
     heartrate_error_frame$error <- "red, green, blue cannot be read from JSON"
@@ -123,15 +126,20 @@ get_filtered_signal <- function(x, sampling_rate, mean_filter_order = 65, method
   #################
   if(sampling_rate > 32){
     
-    bandpass_params <- signal::ellipord(Wp = c(0.5/30,10/30), 
+    bandpass_params <- signal::ellipord(Wp = c(0.6/30,10/30), 
                                         Ws = c(0.3/30, 12/30),
                                         Rp = 0.001,
-                                        Rs = 0.1)
-  }else{
+                                        Rs = 0.001)
+  }else if(sampling_rate > 17){
     bandpass_params <- signal::ellipord(Wp = c(0.4/15,8/15), 
                                         Ws = c(0.2/15, 10/15),
                                         Rp = 0.001,
-                                        Rs = 0.1)
+                                        Rs = 0.001)
+  }else{
+    bandpass_params <- signal::ellipord(Wp = c(0.4/8,5/8), 
+                                        Ws = c(0.2/8, 6/8),
+                                        Rp = 0.001,
+                                        Rs = 0.001)
   }
   # If this doesn't work, use the one below
   # bandpass_params <- signal::ellipord(Wp = c(0.5/30,4/30),
@@ -202,7 +210,7 @@ get_hr_from_time_series <- function(x, sampling_rate, method = 'acf', min_hr = 4
   }
   
   if(method == 'psd'){
-    x_spec <- get_spectrum(
+    x_spec <- mhealthtools:::get_spectrum(
       x, sampling_rate,nfreq = 2^round(log(length(x))/log(2))
     ) %>% dplyr::filter(freq>0.6, freq< 3.3)
     # 0.6Hz = 36BPM, 3.3HZ = 198BPM
@@ -228,8 +236,8 @@ get_hr_from_time_series <- function(x, sampling_rate, method = 'acf', min_hr = 4
   
   # If hr or condidence is NaN, then return hr = 0 and confidence = 0
   if ((length(hr) == 0) || is.null(hr)) {
-  confidence <- NA
-  hr <- NA
+    confidence <- NA
+    hr <- NA
   }
   
   return(c(hr, confidence))
