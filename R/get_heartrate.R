@@ -129,8 +129,8 @@ get_filtered_signal <- function(x, sampling_rate, mean_filter_order = 65, method
   #################
   if(sampling_rate > 50){
     
-    bandpass_params <- signal::ellipord(Wp = c(0.5/30,8.1/30), 
-                                        Ws = c(0.3/30, 9.9/30),
+    bandpass_params <- signal::ellipord(Wp = c(0.5/30,10/30), 
+                                        Ws = c(0.3/30, 12/30),
                                         Rp = 0.001,
                                         Rs = 0.001)
   }else if(sampling_rate > 25){
