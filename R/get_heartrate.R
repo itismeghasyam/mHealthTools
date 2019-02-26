@@ -42,12 +42,15 @@ get_heartrate <- function(heartrate_data, window_length = 10, window_overlap = 0
   
   # Convert window length from seconds to samples
   window_length <- round(sampling_rate * window_length)
-  mean_filter_order <- 65
+  mean_filter_order <- 61
   if(sampling_rate <= 32){
     mean_filter_order <- 33
   }
-  if(sampling_rate <= 17){
-    mean_filter_order <- 17
+  if(sampling_rate <= 18){
+    mean_filter_order <- 19
+  }
+  if(sampling_rate <= 15){
+    mean_filter_order <- 15
   }
   
   ##  Apply pre-processing filter to all heartrate data
@@ -124,20 +127,31 @@ get_filtered_signal <- function(x, sampling_rate, mean_filter_order = 65, method
   ## Elliptic IIR filter design (For 60Hz Sampling Rate)
   ## We chose an Elliptic IIR, since it is an equi-ripple filter
   #################
-  if(sampling_rate > 32){
+  if(sampling_rate > 50){
     
-    bandpass_params <- signal::ellipord(Wp = c(0.6/30,10/30), 
-                                        Ws = c(0.3/30, 12/30),
+    bandpass_params <- signal::ellipord(Wp = c(0.5/30,8.1/30), 
+                                        Ws = c(0.3/30, 9.9/30),
                                         Rp = 0.001,
                                         Rs = 0.001)
-  }else if(sampling_rate > 17){
-    bandpass_params <- signal::ellipord(Wp = c(0.4/15,8/15), 
-                                        Ws = c(0.2/15, 10/15),
+  }else if(sampling_rate > 25){
+    # The inspiration for this parameter set,
+    # Samsung J7 has a sampling rate of ~30Hz
+    bandpass_params <- signal::ellipord(Wp = c(0.5/16,8/16), 
+                                        Ws = c(0.32/16, 9.6/16),
+                                        Rp = 0.001,
+                                        Rs = 0.001)
+  }else if(sampling_rate > 15){
+    # The inspiration for this parameter set,
+    # LG Stylo has a sampling rate of ~16.75Hz
+    bandpass_params <- signal::ellipord(Wp = c(0.42/8.4,5.04/8.4), 
+                                        Ws = c(0.294/8.4, 5.6/8.4),
                                         Rp = 0.001,
                                         Rs = 0.001)
   }else{
-    bandpass_params <- signal::ellipord(Wp = c(0.4/8,5/8), 
-                                        Ws = c(0.2/8, 6/8),
+    # The inspiration for this parameter set,
+    # Moto G6 has a sampling rate of ~13Hz
+    bandpass_params <- signal::ellipord(Wp = c(0.5/6.5,5/6.5), 
+                                        Ws = c(0.3/6.5, 5.5/6.5),
                                         Rp = 0.001,
                                         Rs = 0.001)
   }
