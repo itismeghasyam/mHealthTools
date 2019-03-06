@@ -26,9 +26,11 @@
 #' heartrate_data = heartrate_data[,c('t', 'red', 'green', 'blue')]
 #' heartrate_ftrs = get_heartrate(heartrate_data)
 #'  
-get_heartrate <- function(heartrate_data, window_length = 10, window_overlap = 0.5,
+get_heartrate <- function(heartrate_data,
+                          window_length = 10,
+                          window_overlap = 0.5,
                           method = 'acf') {
-  ## We will throw away ~3s worth of data(180 samples) after filtering,
+  ## We will throw away ~5s worth of data(180 samples) after filtering,
   ## keep this in mind
   
   heartrate_error_frame <- data.frame(red = NA, green = NA, blue = NA,
@@ -42,7 +44,7 @@ get_heartrate <- function(heartrate_data, window_length = 10, window_overlap = 0
   
   # Convert window length from seconds to samples
   window_length <- round(sampling_rate * window_length)
-  mean_filter_order <- 61
+  mean_filter_order <- 65
   if(sampling_rate <= 32){
     mean_filter_order <- 33
   }
@@ -65,7 +67,10 @@ get_heartrate <- function(heartrate_data, window_length = 10, window_overlap = 0
     heartrate_data %>% 
       dplyr::select(red, green, blue) %>% 
       na.omit() %>% 
-      lapply(get_filtered_signal, sampling_rate, mean_filter_order, method) %>% 
+      lapply(get_filtered_signal,
+             sampling_rate,
+             mean_filter_order,
+             method) %>% 
       as.data.frame()
   }, error = function(e){NA})
   if (all(is.na(heartrate_data))) {
@@ -116,61 +121,31 @@ get_heartrate <- function(heartrate_data, window_length = 10, window_overlap = 0
 #' 'acf','psd' or 'peak' for algorithms based on autocorrelation, 
 #' power spectral density and peak picking respectively
 #' @return The filtered time series data
-get_filtered_signal <- function(x, sampling_rate, mean_filter_order = 65, method = 'acf') {
+get_filtered_signal <- function(x,
+                                sampling_rate,
+                                mean_filter_order = 65,
+                                method = 'acf') {
   
   # Defaults are set for 60Hz sampling rate
   x[is.na(x)] <- 0
-  x <- x - mean(x)
+  x <- x[round(2*sampling_rate):length(x)]
+  # Ignore the first two seconds
   
-  ## Our designed signal processing filter for HR data
-  #################
-  ## Elliptic IIR filter design (For 60Hz Sampling Rate)
-  ## We chose an Elliptic IIR, since it is an equi-ripple filter
-  #################
-  if(sampling_rate > 50){
-    
-    bandpass_params <- signal::ellipord(Wp = c(0.5/30,10/30), 
-                                        Ws = c(0.3/30, 12/30),
-                                        Rp = 0.001,
-                                        Rs = 0.001)
-  }else if(sampling_rate > 25){
-    # The inspiration for this parameter set,
-    # Samsung J7 has a sampling rate of ~30Hz
-    bandpass_params <- signal::ellipord(Wp = c(0.5/16,8/16), 
-                                        Ws = c(0.32/16, 9.6/16),
-                                        Rp = 0.001,
-                                        Rs = 0.001)
-  }else if(sampling_rate > 15){
-    # The inspiration for this parameter set,
-    # LG Stylo has a sampling rate of ~16.75Hz
-    bandpass_params <- signal::ellipord(Wp = c(0.42/8.4,5.04/8.4), 
-                                        Ws = c(0.294/8.4, 5.6/8.4),
-                                        Rp = 0.001,
-                                        Rs = 0.001)
+  sampling_rate_rounded <- round(sampling_rate)
+  # Filter the signal based on fiters designed
+  if(sampling_rate_rounded > 15){
+    bf_low <- butter(7, 6/(sampling_rate_rounded/2), type = 'low')
+    bf_high <- butter(7, 0.6/(sampling_rate_rounded/2), type = 'high')
   }else{
-    # The inspiration for this parameter set,
-    # Moto G6 has a sampling rate of ~13Hz
-    bandpass_params <- signal::ellipord(Wp = c(0.5/6.5,5/6.5), 
-                                        Ws = c(0.3/6.5, 5.5/6.5),
-                                        Rp = 0.001,
-                                        Rs = 0.001)
+    bf_low <- butter(7, 4/(sampling_rate_rounded/2), type = 'low')
+    bf_high <- butter(7, 0.6/(sampling_rate_rounded/2), type = 'high')
   }
-  # If this doesn't work, use the one below
-  # bandpass_params <- signal::ellipord(Wp = c(0.5/30,4/30),
-  #                                     Ws = c(0.3/30, 6/30),
-  #                                     Rp = 0.001,
-  #                                     Rs = 0.001)
-  # The reason is if we can't find a good signal in 0.7 to 10Hz,
-  # we will try to find one in 0.7 to 4Hz, because of the noise/heartrate
-  # (higher HR => more higher freq components/noise)
-  # The reason we get a lot of warnings here is for the given bandpass params abovem
-  # We will run into NA/Inf values for the maximum positive value while calculating the
-  # filter co-efficients, so they will be replaced by value calculated using
-  # machine double eps
-  bandpass_filter <- suppressWarnings(signal::ellip(bandpass_params))
   
-  x <- signal::filter(bandpass_filter, x)
+  x <- signal::filter(bf_low, x) # lowpass
+  x <- signal::filter(bf_high, x) # highpass
+  
   x <- x[round(3*sampling_rate):length(x)] # 180 samples is 3s @ 60Hz
+  
   y <- x
   
   #################
@@ -184,10 +159,16 @@ get_filtered_signal <- function(x, sampling_rate, mean_filter_order = 65, method
     for (i in sequence_limits) {
       temp_sequence <- x[seq(i - (mean_filter_order - 1) / 2,
                              (i + (mean_filter_order - 1) / 2),1)]
-      
-      y[i] <- (((x[i] - max(temp_sequence) - min(temp_sequence)) -
-                  (sum(temp_sequence) - max(temp_sequence)) / (mean_filter_order - 1)) /
-                 (max(temp_sequence) - min(temp_sequence) + 0.0000001))
+
+      # y[i] <- (((x[i] - max(temp_sequence) - min(temp_sequence)) -
+      #             (sum(temp_sequence) - max(temp_sequence)) / (mean_filter_order - 1)) /
+      #            (max(temp_sequence) - min(temp_sequence) + 0.00001))
+      y[i] <- (((x[i]) -
+                  (sum(temp_sequence) - (max(temp_sequence)) + min(temp_sequence)) / (mean_filter_order - 2)) /
+                 (max(temp_sequence) - min(temp_sequence) + 0.00001))
+        
+      # y[i] <- (x[i] - (max(temp_sequence) + min(temp_sequence))*0.5)/(max(temp_sequence) - min(temp_sequence))
+
       if(method == 'peak'){
         y[i] = (y[i]*(sign(y[i])+1)/2)
         y[i] = (y[i])^0.15
@@ -211,23 +192,50 @@ get_filtered_signal <- function(x, sampling_rate, mean_filter_order = 65, method
 #' @param min_hr Minimum expected heart rate
 #' @param max_hr Maximum expected heart rate
 #' @return A named vector containing heart rate and the confidence of the result 
-get_hr_from_time_series <- function(x, sampling_rate, method = 'acf', min_hr = 40, max_hr=200) {
+get_hr_from_time_series <- function(x, sampling_rate, method = 'acf', min_hr = 45, max_hr=210) {
   x[is.na(x)] <- 0
   
   if(method == 'acf'){
-    x <- stats::acf(x, lag.max = 500, plot = F)$acf
+    
+    max_lag = round(60 * sampling_rate / min_hr) # 4/3 fs is 45BPM
+    min_lag = round(60 * sampling_rate / max_hr) # 1/3.5 fs is 210BPM
+    
+    x <- stats::acf(x, lag.max = max_lag, plot = F)$acf
     y <- 0 * x
-    y[seq(round(60 * sampling_rate / max_hr), round(60 * sampling_rate / min_hr))] <-
-      x[seq(round(60 * sampling_rate / max_hr), round(60 * sampling_rate / min_hr))]
-    hr <- 60 * sampling_rate / (which.max(y) - 1)
-    confidence <- max(y) / max(x)
+    y[seq(min_lag, max_lag)] <- x[seq(min_lag, max_lag)]
+    y_max_pos <- which.max(y)
+    y_max <- max(y)
+    
+    hr_initial_guess <- 60 * sampling_rate / (y_max_pos - 1)
+    aliasedPeak <- getAliasingPeakLocation(hr = hr_initial_guess,
+                                           sampling_rate = sampling_rate,
+                                           min_lag = min_lag,
+                                           max_lag = max_lag)
+    
+    if(!is.na(aliasedPeak$earlier_peak)){
+      if(y[aliasedPeak$earlier_peak] > 0.7*y_max){
+        hr <-  60 * sampling_rate / (aliasedPeak$earlier_peak - 1)
+        confidence <- y[aliasedPeak$earlier_peak] / max(x)
+      }else{
+        hr <- hr_initial_guess
+        confidence <- y_max/max(x)
+      }
+    }else{
+      peak_magnitude_vec <- y[aliasedPeak$later_peak]
+      if(sum(peak_magnitude_vec > 0.7*y_max) == length(peak_magnitude_vec)){
+        hr <- hr_initial_guess
+      }else{
+        hr <- NA
+      }
+    }
+    
   }
   
   if(method == 'psd'){
     x_spec <- mhealthtools:::get_spectrum(
       x, sampling_rate,nfreq = 2^round(log(length(x))/log(2))
-    ) %>% dplyr::filter(freq>0.6, freq< 3.3)
-    # 0.6Hz = 36BPM, 3.3HZ = 198BPM
+    ) %>% dplyr::filter(freq>0.7, freq< 3.3)
+    # 0.7Hz = 42BPM, 3.3HZ = 198BPM
     hr <- 60*x_spec$freq[which.max(x_spec$pdf)]
     confidence <- NA
   }
@@ -249,10 +257,52 @@ get_hr_from_time_series <- function(x, sampling_rate, method = 'acf', min_hr = 4
   
   
   # If hr or condidence is NaN, then return hr = 0 and confidence = 0
-  if ((length(hr) == 0) || is.null(hr)) {
+  if ((length(hr) == 0) || is.null(hr) || is.na(hr)) {
     confidence <- NA
     hr <- NA
   }
   
   return(c(hr, confidence))
+}
+
+
+getAliasingPeakLocation <- function(hr, sampling_rate, min_lag, max_lag){
+  # The following ranges are only valid if the minimum hr is 45bpm and
+  # maximum hr is less than 240bpm, since for the acf of the ideal hr signal
+  # Npeaks = floor(BPM/minHR) - floor(BPM/maxHR)
+  # in the search ranges 60*fs/maxHR to 60*fs/minHR samples
+  
+  if(hr < 90){
+    Npeaks = 1
+    # 45BPM - 89BPM
+  }else if(hr < 135){
+    Npeaks = 2
+    # 90BPM - 134BPM
+  }else if(hr < 180){
+    Npeaks = 3
+    # 135BPM -179BPM
+  }else if(hr < 225){
+    Npeaks = 4
+    # 180BPM - 225BPM
+  }else if(hr <= 240){
+    Npeaks = 5
+  }
+  
+  actual_lag = round(sampling_rate*60/hr)
+  
+  earlier_peak <- floor(actual_lag/2)
+  if(Npeaks > 1){
+    later_peak <- actual_lag*seq(2,Npeaks)
+    later_peak[later_peak>max_lag] <- NA
+  }else{
+    later_peak <- NA
+  }
+  
+  if(earlier_peak < min_lag){
+    earlier_peak <- NA
+  }
+  
+  return(list(Npeaks = Npeaks,
+              earlier_peak = earlier_peak,
+              later_peak = later_peak))
 }
