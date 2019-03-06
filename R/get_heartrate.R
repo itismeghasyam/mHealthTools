@@ -134,11 +134,11 @@ get_filtered_signal <- function(x,
   sampling_rate_rounded <- round(sampling_rate)
   # Filter the signal based on fiters designed
   if(sampling_rate_rounded > 15){
-    bf_low <- butter(7, 6/(sampling_rate_rounded/2), type = 'low')
-    bf_high <- butter(7, 0.6/(sampling_rate_rounded/2), type = 'high')
+    bf_low <- signal::butter(7, 6/(sampling_rate_rounded/2), type = 'low')
+    bf_high <- signal::butter(7, 0.6/(sampling_rate_rounded/2), type = 'high')
   }else{
-    bf_low <- butter(7, 4/(sampling_rate_rounded/2), type = 'low')
-    bf_high <- butter(7, 0.6/(sampling_rate_rounded/2), type = 'high')
+    bf_low <- signal::butter(7, 4/(sampling_rate_rounded/2), type = 'low')
+    bf_high <- signal::butter(7, 0.6/(sampling_rate_rounded/2), type = 'high')
   }
   
   x <- signal::filter(bf_low, x) # lowpass
