@@ -224,6 +224,7 @@ get_hr_from_time_series <- function(x, sampling_rate, method = 'acf', min_hr = 4
       peak_magnitude_vec <- y[aliasedPeak$later_peak]
       if(sum(peak_magnitude_vec > 0.7*y_max) == length(peak_magnitude_vec)){
         hr <- hr_initial_guess
+        confidence <- y_max/max(x)
       }else{
         hr <- NA
       }
