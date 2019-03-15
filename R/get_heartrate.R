@@ -159,16 +159,16 @@ get_filtered_signal <- function(x,
     for (i in sequence_limits) {
       temp_sequence <- x[seq(i - (mean_filter_order - 1) / 2,
                              (i + (mean_filter_order - 1) / 2),1)]
-      
+
       # y[i] <- (((x[i] - max(temp_sequence) - min(temp_sequence)) -
       #             (sum(temp_sequence) - max(temp_sequence)) / (mean_filter_order - 1)) /
       #            (max(temp_sequence) - min(temp_sequence) + 0.00001))
       y[i] <- (((x[i]) -
                   (sum(temp_sequence) - (max(temp_sequence)) + min(temp_sequence)) / (mean_filter_order - 2)) /
                  (max(temp_sequence) - min(temp_sequence) + 0.00001))
-      
+        
       # y[i] <- (x[i] - (max(temp_sequence) + min(temp_sequence))*0.5)/(max(temp_sequence) - min(temp_sequence))
-      
+
       if(method == 'peak'){
         y[i] = (y[i]*(sign(y[i])+1)/2)
         y[i] = (y[i])^0.15
@@ -201,10 +201,13 @@ get_hr_from_time_series <- function(x, sampling_rate, method = 'acf', min_hr = 4
     min_lag = round(60 * sampling_rate / max_hr) # 1/3.5 fs is 210BPM
     
     x <- stats::acf(x, lag.max = max_lag, plot = F)$acf
+    # x <- x-min(x)
     y <- 0 * x
     y[seq(min_lag, max_lag)] <- x[seq(min_lag, max_lag)]
+    # y <- y-min(y)
     y_max_pos <- which.max(y)
     y_max <- max(y)
+    y_min <- min(y)
     
     hr_initial_guess <- 60 * sampling_rate / (y_max_pos - 1)
     aliasedPeak <- getAliasingPeakLocation(hr = hr_initial_guess,
@@ -214,13 +217,14 @@ get_hr_from_time_series <- function(x, sampling_rate, method = 'acf', min_hr = 4
                                            max_lag = max_lag)
     
     if(!is.na(aliasedPeak$earlier_peak[1])){
-      peak_pos <- y[aliasedPeak$earlier_peak] > 0.7*y_max
+      peak_pos <- (y[aliasedPeak$earlier_peak]-y_min) > 0.7*(y_max-y_min)
       peak_pos <- aliasedPeak$earlier_peak[peak_pos]
       if(length(peak_pos>0)){
         hr_vec <- 60 * sampling_rate / (peak_pos - 1)
-        hr_pos <- which.min(abs(hr_vec - hr_initial_guess*(aliasedPeak$Npeaks+1)/(aliasedPeak$Npeaks)))
-        hr <- hr_vec[hr_pos]
-        confidence <- y[peak_pos[hr_pos]] / max(x)
+        # hr_pos <- which.min(abs(hr_vec - hr_initial_guess*(aliasedPeak$Npeaks+1)/(aliasedPeak$Npeaks)))
+        hr <- mean(hr_vec,hr_initial_guess*(aliasedPeak$Npeaks+1)/(aliasedPeak$Npeaks))
+        # confidence <- y[peak_pos[hr_pos]] / max(x)
+        confidence <- mean(y[peak_pos]-y_min)/(max(x)-min(x))
       }else{
         hr <- hr_initial_guess
         confidence <- y_max/max(x)
@@ -298,13 +302,13 @@ getAliasingPeakLocation <- function(hr, actual_lag = NA,sampling_rate, min_lag, 
     actual_lag = ceiling(sampling_rate*60/hr + 1)
   }
   
-  if(actual_lag%%2 == 0){
-    earlier_peak <- actual_lag/2
-  }else{
-    earlier_peak <- c(floor(actual_lag/2), ceiling(actual_lag/2))
-  }
+if(actual_lag%%2 == 0){
+  earlier_peak <- actual_lag/2
+}else{
+  earlier_peak <- c(floor(actual_lag/2), ceiling(actual_lag/2))
+}
   
-  
+    
   if(Npeaks > 1){
     later_peak <- actual_lag*seq(2,Npeaks)
     later_peak[later_peak>max_lag] <- NA
@@ -318,3 +322,24 @@ getAliasingPeakLocation <- function(hr, actual_lag = NA,sampling_rate, min_lag, 
               earlier_peak = earlier_peak,
               later_peak = later_peak))
 }
+
+
+getWindowMetrics <- function(x, sampling_rate, min_hr = 45, max_hr = 240){
+  # x is a time series
+  sd.tm <- sd(x, na.rm = T)
+  
+  
+  max_lag = round(60 * sampling_rate / min_hr) # 4/3 fs is 45BPM
+  min_lag = round(60 * sampling_rate / max_hr) # 1/3.5 fs is 210BPM
+  
+  x <- stats::acf(x, lag.max = max_lag, plot = F)$acf
+  y <- 0 * x
+  y[seq(min_lag, max_lag)] <- x[seq(min_lag, max_lag)]
+  y_max_pos <- which.max(y)
+  y_min_pos <- which.min(y)
+  
+  y_max <- max(y)
+  
+}
+
+
