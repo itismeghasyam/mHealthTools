@@ -134,11 +134,11 @@ get_filtered_signal <- function(x,
   sampling_rate_rounded <- round(sampling_rate)
   # Filter the signal based on fiters designed
   if(sampling_rate_rounded > 15){
-    bf_low <- signal::butter(7, 6/(sampling_rate_rounded/2), type = 'low')
-    bf_high <- signal::butter(7, 0.6/(sampling_rate_rounded/2), type = 'high')
+    bf_low <- signal::butter(7, 5/(sampling_rate_rounded/2), type = 'low')
+    bf_high <- signal::butter(7, 0.5/(sampling_rate_rounded/2), type = 'high')
   }else{
     bf_low <- signal::butter(7, 4/(sampling_rate_rounded/2), type = 'low')
-    bf_high <- signal::butter(7, 0.6/(sampling_rate_rounded/2), type = 'high')
+    bf_high <- signal::butter(7, 0.5/(sampling_rate_rounded/2), type = 'high')
   }
   
   x <- signal::filter(bf_low, x) # lowpass
@@ -159,16 +159,16 @@ get_filtered_signal <- function(x,
     for (i in sequence_limits) {
       temp_sequence <- x[seq(i - (mean_filter_order - 1) / 2,
                              (i + (mean_filter_order - 1) / 2),1)]
-
+      
       # y[i] <- (((x[i] - max(temp_sequence) - min(temp_sequence)) -
       #             (sum(temp_sequence) - max(temp_sequence)) / (mean_filter_order - 1)) /
       #            (max(temp_sequence) - min(temp_sequence) + 0.00001))
       y[i] <- (((x[i]) -
                   (sum(temp_sequence) - (max(temp_sequence)) + min(temp_sequence)) / (mean_filter_order - 2)) /
                  (max(temp_sequence) - min(temp_sequence) + 0.00001))
-        
+      
       # y[i] <- (x[i] - (max(temp_sequence) + min(temp_sequence))*0.5)/(max(temp_sequence) - min(temp_sequence))
-
+      
       if(method == 'peak'){
         y[i] = (y[i]*(sign(y[i])+1)/2)
         y[i] = (y[i])^0.15
@@ -208,14 +208,19 @@ get_hr_from_time_series <- function(x, sampling_rate, method = 'acf', min_hr = 4
     
     hr_initial_guess <- 60 * sampling_rate / (y_max_pos - 1)
     aliasedPeak <- getAliasingPeakLocation(hr = hr_initial_guess,
+                                           actual_lag = y_max_pos,
                                            sampling_rate = sampling_rate,
                                            min_lag = min_lag,
                                            max_lag = max_lag)
     
-    if(!is.na(aliasedPeak$earlier_peak)){
-      if(y[aliasedPeak$earlier_peak] > 0.7*y_max){
-        hr <-  60 * sampling_rate / (aliasedPeak$earlier_peak - 1)
-        confidence <- y[aliasedPeak$earlier_peak] / max(x)
+    if(!is.na(aliasedPeak$earlier_peak[1])){
+      peak_pos <- y[aliasedPeak$earlier_peak] > 0.7*y_max
+      peak_pos <- aliasedPeak$earlier_peak[peak_pos]
+      if(length(peak_pos>0)){
+        hr_vec <- 60 * sampling_rate / (peak_pos - 1)
+        hr_pos <- which.min(abs(hr_vec - hr_initial_guess*(aliasedPeak$Npeaks+1)/(aliasedPeak$Npeaks)))
+        hr <- hr_vec[hr_pos]
+        confidence <- y[peak_pos[hr_pos]] / max(x)
       }else{
         hr <- hr_initial_guess
         confidence <- y_max/max(x)
@@ -267,7 +272,7 @@ get_hr_from_time_series <- function(x, sampling_rate, method = 'acf', min_hr = 4
 }
 
 
-getAliasingPeakLocation <- function(hr, sampling_rate, min_lag, max_lag){
+getAliasingPeakLocation <- function(hr, actual_lag = NA,sampling_rate, min_lag, max_lag){
   # The following ranges are only valid if the minimum hr is 45bpm and
   # maximum hr is less than 240bpm, since for the acf of the ideal hr signal
   # Npeaks = floor(BPM/minHR) - floor(BPM/maxHR)
@@ -289,9 +294,17 @@ getAliasingPeakLocation <- function(hr, sampling_rate, min_lag, max_lag){
     Npeaks = 5
   }
   
-  actual_lag = round(sampling_rate*60/hr)
+  if(is.na(actual_lag)){
+    actual_lag = ceiling(sampling_rate*60/hr + 1)
+  }
   
-  earlier_peak <- floor(actual_lag/2)
+  if(actual_lag%%2 == 0){
+    earlier_peak <- actual_lag/2
+  }else{
+    earlier_peak <- c(floor(actual_lag/2), ceiling(actual_lag/2))
+  }
+  
+  
   if(Npeaks > 1){
     later_peak <- actual_lag*seq(2,Npeaks)
     later_peak[later_peak>max_lag] <- NA
@@ -299,9 +312,7 @@ getAliasingPeakLocation <- function(hr, sampling_rate, min_lag, max_lag){
     later_peak <- NA
   }
   
-  if(earlier_peak < min_lag){
-    earlier_peak <- NA
-  }
+  earlier_peak[earlier_peak < min_lag] <- NA
   
   return(list(Npeaks = Npeaks,
               earlier_peak = earlier_peak,
