@@ -210,38 +210,61 @@ get_hr_from_time_series <- function(x, sampling_rate, method = 'acf', min_hr = 4
     y_min <- min(y)
     
     hr_initial_guess <- 60 * sampling_rate / (y_max_pos - 1)
-    aliasedPeak <- getAliasingPeakLocation(hr = hr_initial_guess,
-                                           actual_lag = y_max_pos,
-                                           sampling_rate = sampling_rate,
-                                           min_lag = min_lag,
-                                           max_lag = max_lag)
     
-    if(!is.na(aliasedPeak$earlier_peak[1])){
-      peak_pos <- (y[aliasedPeak$earlier_peak]-y_min) > 0.7*(y_max-y_min)
-      peak_pos <- aliasedPeak$earlier_peak[peak_pos]
-      if(length(peak_pos>0)){
-        hr_vec <- 60 * sampling_rate / (peak_pos - 1)
-        # hr_pos <- which.min(abs(hr_vec - hr_initial_guess*(aliasedPeak$Npeaks+1)/(aliasedPeak$Npeaks)))
-        hr <- mean(hr_vec,hr_initial_guess*(aliasedPeak$Npeaks+1)/(aliasedPeak$Npeaks))
-        # confidence <- y[peak_pos[hr_pos]] / max(x)
-        confidence <- mean(y[peak_pos]-y_min)/(max(x)-min(x))
+    aliased_estimates <- getAliasingPeakEstimates(x = x,
+                                                  hr = hr_initial_guess,
+                                                  sampling_rate = sampling_rate)
+    aliasing_hr <- aliased_estimates$aliasing_hr
+    Npeaks <- aliased_estimates$Npeaks
+    
+    if(!is.na(aliasing_hr)){
+      if(abs((aliasing_hr/hr_initial_guess) - ((Npeaks+1)/Npeaks)) < 0.2){
+        hr <- aliasing_hr
+        confidence <- aliased_estimates$aliasing_conf
       }else{
         hr <- hr_initial_guess
         confidence <- y_max/max(x)
-      }
+      } 
     }else{
-      peak_magnitude_vec <- y[aliasedPeak$later_peak]
-      status_flag <- (sum(peak_magnitude_vec > 0.7*y_max) == length(peak_magnitude_vec))
-      if(!is.logical(status_flag) || is.na(status_flag)){
-        status_flag <- F
-      }
-      if(status_flag){
-        hr <- hr_initial_guess
-        confidence <- y_max/max(x)
-      }else{
-        hr <- NA
-      }
+      hr <- hr_initial_guess
+      confidence <- y_max/max(x)
     }
+    
+    
+    ############# < METHOD USING ALIASED PEAK LOCATION> ################
+    # aliasedPeak <- getAliasingPeakLocation(hr = hr_initial_guess,
+    #                                        actual_lag = y_max_pos,
+    #                                        sampling_rate = sampling_rate,
+    #                                        min_lag = min_lag,
+    #                                        max_lag = max_lag)
+    # 
+    # if(!is.na(aliasedPeak$earlier_peak[1])){
+    #   peak_pos <- (y[aliasedPeak$earlier_peak]-y_min) > 0.7*(y_max-y_min)
+    #   peak_pos <- aliasedPeak$earlier_peak[peak_pos]
+    #   if(length(peak_pos>0)){
+    #     hr_vec <- 60 * sampling_rate / (peak_pos - 1)
+    #     # hr_pos <- which.min(abs(hr_vec - hr_initial_guess*(aliasedPeak$Npeaks+1)/(aliasedPeak$Npeaks)))
+    #     hr <- mean(hr_vec,hr_initial_guess*(aliasedPeak$Npeaks+1)/(aliasedPeak$Npeaks))
+    #     # confidence <- y[peak_pos[hr_pos]] / max(x)
+    #     confidence <- mean(y[peak_pos]-y_min)/(max(x)-min(x))
+    #   }else{
+    #     hr <- hr_initial_guess
+    #     confidence <- y_max/max(x)
+    #   }
+    # }else{
+    #   peak_magnitude_vec <- y[aliasedPeak$later_peak]
+    #   status_flag <- (sum(peak_magnitude_vec > 0.7*y_max) == length(peak_magnitude_vec))
+    #   if(!is.logical(status_flag) || is.na(status_flag)){
+    #     status_flag <- F
+    #   }
+    #   if(status_flag){
+    #     hr <- hr_initial_guess
+    #     confidence <- y_max/max(x)
+    #   }else{
+    #     hr <- NA
+    #   }
+    # }
+    ############# < METHOD USING ALIASED PEAK LOCATION> ################
     
   }
   
@@ -345,5 +368,71 @@ getWindowMetrics <- function(x, sampling_rate, min_hr = 45, max_hr = 240){
   y_max <- max(y)
   
 }
+
+getAliasingPeakEstimates <- function(x, hr, sampling_rate){
+  # The following ranges are only valid if the minimum hr is 45bpm and
+  # maximum hr is less than 240bpm, since for the acf of the ideal hr signal
+  # Npeaks = floor(BPM/minHR) - floor(BPM/maxHR)
+  # in the search ranges 60*fs/maxHR to 60*fs/minHR samples
+  # Bin1 = 45-90 BPM
+  # Bin2 = 90-135 BPM
+  # Bin3 = 135-180 BPM
+  # Bin4 = 180-225 BPM
+  # Bin5 = 225-240 BPM
+  
+  if(hr < 90){
+    Npeaks = 1
+    aliasing_bin = 2
+    min_hr_alias = 90
+    max_hr_alias = 135
+    # 45BPM - 89BPM
+  }else if(hr < 135){
+    Npeaks = 2
+    aliasing_bin = 3
+    min_hr_alias = 135
+    max_hr_alias = 180
+    # 90BPM - 134BPM
+  }else if(hr < 180){
+    Npeaks = 3
+    aliasing_bin = 4
+    min_hr_alias = 180
+    max_hr_alias = 225
+    # 135BPM -179BPM
+  }else if(hr < 225){
+    Npeaks = 4
+    aliasing_bin = 5
+    min_hr_alias = 225
+    max_hr_alias = 240
+    # 180BPM - 225BPM
+  }else if(hr <= 240){
+    Npeaks = 5
+    aliasing_bin = NA
+    min_hr_alias = NA
+    max_hr_alias = NA
+  }
+  
+  y <- NA * x
+  most_conf_hr_alias <- NA
+  max_conf_y_alias <- NA
+  
+  if(!is.na(aliasing_bin)){
+    lag_left <- ceiling(60 * sampling_rate / max_hr_alias)
+    lag_right <- floor(60 * sampling_rate / min_hr_alias)
+    y[seq(lag_left, lag_right)] <- x[seq(lag_left, lag_right)]
+    y_max_pos <- which.max(y)
+    most_conf_hr_alias <-  60 * sampling_rate / (y_max_pos - 1)
+    max_conf_y_alias <- max(y, na.rm = T)
+  }
+  
+  if(most_conf_hr_alias > max_hr_alias){
+    most_conf_hr_alias <- NA
+    max_conf_y_alias <- NA
+  }
+  
+  return(list(Npeaks = Npeaks,
+              aliasing_hr = most_conf_hr_alias,
+              aliasing_conf = max_conf_y_alias))
+}
+
 
 
