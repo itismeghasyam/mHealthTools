@@ -128,8 +128,8 @@ get_filtered_signal <- function(x,
   
   # Defaults are set for 60Hz sampling rate
   x[is.na(x)] <- 0
-  x <- x[round(2*sampling_rate):length(x)]
-  # Ignore the first two seconds
+  x <- x[round(3*sampling_rate):length(x)]
+  # Ignore the first 3s
   
   sampling_rate_rounded <- round(sampling_rate)
   # Filter the signal based on fiters designed
@@ -142,9 +142,9 @@ get_filtered_signal <- function(x,
   }
   
   x <- signal::filter(bf_low, x) # lowpass
+  x <- x[round(sampling_rate):length(x)] # 1s
   x <- signal::filter(bf_high, x) # highpass
-  
-  x <- x[round(3*sampling_rate):length(x)] # 180 samples is 3s @ 60Hz
+  x <- x[round(sampling_rate):length(x)] # 1s @ 60Hz
   
   y <- x
   
