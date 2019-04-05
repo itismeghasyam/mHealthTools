@@ -216,20 +216,31 @@ get_hr_from_time_series <- function(x, sampling_rate, method = 'acf', min_hr = 4
                                            min_lag = min_lag,
                                            max_lag = max_lag)
     
-    if(!is.na(aliasedPeak$earlier_peak[1])){
-      peak_pos <- (y[aliasedPeak$earlier_peak]-y_min) > 0.7*(y_max-y_min)
-      peak_pos <- aliasedPeak$earlier_peak[peak_pos]
-      if(length(peak_pos>0)){
+    if(!is.na(aliasedPeak$earlier_peak[1])){ # Check if there is atleast one earlier peak
+      peak_pos_thresholding_result <- (y[aliasedPeak$earlier_peak]-y_min) > 0.7*(y_max-y_min)
+      # Check which of the earlier peak(s) satisfy the threshold
+      
+      peak_pos <- aliasedPeak$earlier_peak[peak_pos_thresholding_result]
+      # Subset to those earlier peak(s) that satisfy the thresholding criterion above
+      
+      
+      if(length(peak_pos)>0){
         hr_vec <- 60 * sampling_rate / (peak_pos - 1)
-        # hr_pos <- which.min(abs(hr_vec - hr_initial_guess*(aliasedPeak$Npeaks+1)/(aliasedPeak$Npeaks)))
+        # Estimate heartrates for each of the peaks that satisfy the thresholding criterion
+       
         hr <- mean(hr_vec,hr_initial_guess*(aliasedPeak$Npeaks+1)/(aliasedPeak$Npeaks))
-        # confidence <- y[peak_pos[hr_pos]] / max(x)
+        # Estimate the heartrate based on our initial guess, Npeaks and the estimated heartrates of the
+        # peaks that satisfy the threshold
+      
         confidence <- mean(y[peak_pos]-y_min)/(max(x)-min(x))
+        # Estimate the confidence based on the peaks that satisfy the threshold
+        
       }else{
         hr <- hr_initial_guess
         confidence <- y_max/max(x)
       }
-    }else{
+    }else{ # Get into this loop if no earlier peak was pickedup during getAliasingPeakLocation
+      
       peak_magnitude_vec <- y[aliasedPeak$later_peak]
       status_flag <- (sum(peak_magnitude_vec > 0.7*y_max) == length(peak_magnitude_vec))
       if(!is.logical(status_flag) || is.na(status_flag)){
