@@ -343,6 +343,10 @@ getAliasingPeakLocation <- function(hr, actual_lag = NA,sampling_rate, min_lag, 
   
   earlier_peak[earlier_peak < min_lag] <- NA
   
+  # Correction for R index
+  earlier_peak <- earlier_peak + 1
+  later_peak <- later_peak + 1
+  
   return(list(Npeaks = Npeaks,
               earlier_peak = earlier_peak,
               later_peak = later_peak))
