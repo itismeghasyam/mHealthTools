@@ -35,7 +35,12 @@ get_heartrate <- function(heartrate_data,
   
   heartrate_error_frame <- data.frame(red = NA, green = NA, blue = NA,
                                       error = NA, sampling_rate = NA)
-  sampling_rate <- mhealthtools:::get_sampling_rate(heartrate_data)
+  # sampling_rate <- mhealthtools:::get_sampling_rate(heartrate_data) 
+  sampling_rate <- tryCatch({
+    fs <- 1/median(diff(na.omit(heartrate_data$t)))
+  },
+  error = function(e){NA})
+  
   if (is.infinite(sampling_rate) || is.na(sampling_rate)) {
     heartrate_error_frame$error <- paste("Sampling Rate calculated from timestamp is Inf",
                                          "or NaN / timestamp not found in json")
@@ -313,8 +318,14 @@ getAliasingPeakLocation <- function(hr, actual_lag = NA,sampling_rate, min_lag, 
   }
   
   if(is.na(actual_lag)){
-    actual_lag = ceiling(sampling_rate*60/hr + 1)
+    actual_lag = ceiling(sampling_rate*60/hr + 1) 
+    # the +1 is because of the array indexing issue in R(it starts from 1 vs 0)
   }
+  
+  actual_lag <- actual_lag-1 
+  # Added this step because in R, the indexing of an array starts at 1
+  # and so our period of the signal is really actual_lag-1, hence
+  # the correction
   
   if(actual_lag%%2 == 0){
     earlier_peak <- actual_lag/2
