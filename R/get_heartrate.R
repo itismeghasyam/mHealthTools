@@ -35,9 +35,13 @@ get_heartrate <- function(heartrate_data,
   
   heartrate_error_frame <- data.frame(red = NA, green = NA, blue = NA,
                                       error = NA, sampling_rate = NA)
-  # sampling_rate <- mhealthtools:::get_sampling_rate(heartrate_data) 
+  
+  nrow_data <- nrow(heartrate_data)
+  
   sampling_rate <- tryCatch({
-    fs <- 1/median(diff(na.omit(heartrate_data$t)))
+    # fs <- 1/median(diff(na.omit(heartrate_data$t)))
+    fs <- mhealthtools:::get_sampling_rate(heartrate_data[2:nrow_data,])
+    # 2:X, because we don't want to include the first sample in sampling_rate calculation
   },
   error = function(e){NA})
   
@@ -147,9 +151,9 @@ get_filtered_signal <- function(x,
   }
   
   x <- signal::filter(bf_low, x) # lowpass
-  x <- x[round(sampling_rate):length(x)] # 1s
+  x <- x[(round(sampling_rate)+1):length(x)] # 1s
   x <- signal::filter(bf_high, x) # highpass
-  x <- x[round(sampling_rate):length(x)] # 1s @ 60Hz
+  x <- x[(round(sampling_rate)+1):length(x)] # 1s @ 60Hz
   
   y <- x
   
