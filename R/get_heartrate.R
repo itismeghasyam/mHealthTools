@@ -96,14 +96,14 @@ get_heartrate <- function(heartrate_data,
                 mean_filter_order,
                 method) %>% 
             as.data.frame()
-          }, error = function(e){NA})
+        }, error = function(e){NA})
       })
-      
-      # lapply(get_filtered_signal,
-      #        sampling_rate,
-      #        mean_filter_order,
-      #        method) %>% 
-      # as.data.frame()
+    
+    # lapply(get_filtered_signal,
+    #        sampling_rate,
+    #        mean_filter_order,
+    #        method) %>% 
+    # as.data.frame()
   }, error = function(e){NA})
   if (all(is.na(heartrate_data))) {
     heartrate_error_frame$error <- "Error in filtering the signal"
@@ -111,7 +111,7 @@ get_heartrate <- function(heartrate_data,
   }
   
   
-
+  
   # Get HR for each filtered segment of each color
   heartrate_data <- heartrate_data %>%
     lapply(function(dfl) {
@@ -250,11 +250,11 @@ get_hr_from_time_series <- function(x, sampling_rate, method = 'acf', min_hr = 4
       if(length(peak_pos)>0){
         hr_vec <- 60 * sampling_rate / (peak_pos - 1)
         # Estimate heartrates for each of the peaks that satisfy the thresholding criterion
-       
+        
         hr <- mean(hr_vec,hr_initial_guess*(aliasedPeak$Npeaks+1)/(aliasedPeak$Npeaks))
         # Estimate the heartrate based on our initial guess, Npeaks and the estimated heartrates of the
         # peaks that satisfy the threshold
-      
+        
         confidence <- mean(y[peak_pos]-y_min)/(max(x)-min(x))
         # Estimate the confidence based on the peaks that satisfy the threshold
         
