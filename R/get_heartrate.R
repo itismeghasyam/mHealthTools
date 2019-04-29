@@ -27,8 +27,8 @@
 #' heartrate_ftrs = get_heartrate(heartrate_data)
 #'  
 get_heartrate <- function(heartrate_data,
-                          window_length = 10,
-                          window_overlap = 0.5,
+                          window_length = 15,
+                          window_overlap = 14/15,
                           method = 'acf') {
   ## We will throw away ~5s worth of data(180 samples) after filtering,
   ## keep this in mind
@@ -72,22 +72,6 @@ get_heartrate <- function(heartrate_data,
   # It is also inline with our mean centering filter, since that is also
   # a running filter
   
-  heartrate_data <- tryCatch({
-    heartrate_data %>% 
-      dplyr::select(red, green, blue) %>% 
-      na.omit() %>% 
-      lapply(get_filtered_signal,
-             sampling_rate,
-             mean_filter_order,
-             method) %>% 
-      as.data.frame()
-  }, error = function(e){NA})
-  if (all(is.na(heartrate_data))) {
-    heartrate_error_frame$error <- "Error in filtering the signal"
-    return(heartrate_error_frame)
-  }
-  
-  
   # Split each color into segments based on window_length
   heartrate_data <- tryCatch({
     heartrate_data %>%
@@ -100,6 +84,34 @@ get_heartrate <- function(heartrate_data,
     return(heartrate_error_frame)
   }
   
+  
+  heartrate_data <- tryCatch({
+    heartrate_data %>%
+      lapply(function(dfl){
+        dfl[is.na(dfl)] <- 0
+        dfl = tryCatch({
+          apply(dfl,2,
+                get_filtered_signal,
+                sampling_rate,
+                mean_filter_order,
+                method) %>% 
+            as.data.frame()
+          }, error = function(e){NA})
+      })
+      
+      # lapply(get_filtered_signal,
+      #        sampling_rate,
+      #        mean_filter_order,
+      #        method) %>% 
+      # as.data.frame()
+  }, error = function(e){NA})
+  if (all(is.na(heartrate_data))) {
+    heartrate_error_frame$error <- "Error in filtering the signal"
+    return(heartrate_error_frame)
+  }
+  
+  
+
   # Get HR for each filtered segment of each color
   heartrate_data <- heartrate_data %>%
     lapply(function(dfl) {
@@ -137,7 +149,7 @@ get_filtered_signal <- function(x,
   
   # Defaults are set for 60Hz sampling rate
   x[is.na(x)] <- 0
-  x <- x[round(3*sampling_rate):length(x)]
+  # x <- x[round(3*sampling_rate):length(x)]
   # Ignore the first 3s
   
   sampling_rate_rounded <- round(sampling_rate)
@@ -150,10 +162,12 @@ get_filtered_signal <- function(x,
     bf_high <- signal::butter(7, 0.5/(sampling_rate_rounded/2), type = 'high')
   }
   
+  x <- x-min(x,na.rm = T)
+  
   x <- signal::filter(bf_low, x) # lowpass
-  x <- x[(round(sampling_rate)+1):length(x)] # 1s
+  x <- x[(2*round(sampling_rate)+1):length(x)] # 1s
   x <- signal::filter(bf_high, x) # highpass
-  x <- x[(round(sampling_rate)+1):length(x)] # 1s @ 60Hz
+  x <- x[(2*round(sampling_rate)+1):length(x)] # 1s @ 60Hz
   
   y <- x
   
