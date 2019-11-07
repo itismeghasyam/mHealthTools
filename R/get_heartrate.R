@@ -51,8 +51,10 @@ get_heartrate <- function(heartrate_data,
     return(heartrate_error_frame)
   }
   
-  # Convert window length from seconds to samples
-  window_length <- round(sampling_rate * window_length)
+  # round the sampling rate to an integer
+  sampling_rate <- round(sampling_rate)
+  
+  # mean filter order (mforder)   
   mean_filter_order <- 65
   if(sampling_rate <= 32){
     mean_filter_order <- 33
@@ -64,6 +66,12 @@ get_heartrate <- function(heartrate_data,
     mean_filter_order <- 15
   }
   
+  # Convert window length from seconds to samples
+  window_length <- (window_length + 2*2)*sampling_rate + mean_filter_order
+  
+  # find window overlap of 1s from window_length above
+  window_overlap <- 1 - (sampling_rate)/(window_length)
+  
   ##  Apply pre-processing filter to all heartrate data
   
   # We do so as we are using an IIR (running filter), so we do not need
@@ -72,21 +80,8 @@ get_heartrate <- function(heartrate_data,
   # It is also inline with our mean centering filter, since that is also
   # a running filter
   
-  heartrate_data <- tryCatch({
-    heartrate_data %>% 
-      dplyr::select(red, green, blue) %>% 
-      na.omit() %>% 
-      lapply(get_filtered_signal,
-             sampling_rate,
-             mean_filter_order,
-             method) %>% 
-      as.data.frame()
-  }, error = function(e){NA})
-  if (all(is.na(heartrate_data))) {
-    heartrate_error_frame$error <- "Error in filtering the signal"
-    return(heartrate_error_frame)
-  }
-  
+  ## Chunk heartrate data into windows of length window_length
+  ## with a 1s overlap
   
   # Split each color into segments based on window_length
   heartrate_data <- tryCatch({
@@ -99,6 +94,24 @@ get_heartrate <- function(heartrate_data,
     heartrate_error_frame$error <- "red, green, blue cannot be read from JSON"
     return(heartrate_error_frame)
   }
+  
+  
+  # Filter each window from each channel
+  # Get HR for each filtered segment of each color
+  heartrate_data <- tryCatch({
+    heartrate_data %>%
+      lapply(function(dfl) {
+        dfl <- tryCatch({
+          apply(dfl, 2, get_filtered_signal, sampling_rate, mean_filter_order, method)
+        }, error = function(e) {NA})
+        return(dfl)
+      })  
+    }, error = function(e){NA})
+  if (all(is.na(heartrate_data))) {
+    heartrate_error_frame$error <- "Error in filtering the signal"
+    return(heartrate_error_frame)
+  }
+  
   
   # Get HR for each filtered segment of each color
   heartrate_data <- heartrate_data %>%
@@ -137,10 +150,12 @@ get_filtered_signal <- function(x,
   
   # Defaults are set for 60Hz sampling rate
   x[is.na(x)] <- 0
-  x <- x[round(3*sampling_rate):length(x)]
-  # Ignore the first 3s
+
+  # reset min value to 0
+  x <- x - min(x)
   
   sampling_rate_rounded <- round(sampling_rate)
+  
   # Filter the signal based on fiters designed
   if(sampling_rate_rounded > 15){
     bf_low <- signal::butter(7, 5/(sampling_rate_rounded/2), type = 'low')
@@ -151,9 +166,9 @@ get_filtered_signal <- function(x,
   }
   
   x <- signal::filter(bf_low, x) # lowpass
-  x <- x[(round(sampling_rate)+1):length(x)] # 1s
+  x <- x[(2*round(sampling_rate)+1):length(x)] # 2s
   x <- signal::filter(bf_high, x) # highpass
-  x <- x[(round(sampling_rate)+1):length(x)] # 1s @ 60Hz
+  x <- x[(2*round(sampling_rate)+1):length(x)] # 2s @ 60Hz
   
   y <- x
   
@@ -237,7 +252,7 @@ get_hr_from_time_series <- function(x, sampling_rate, method = 'acf', min_hr = 4
         hr_vec <- 60 * sampling_rate / (peak_pos - 1)
         # Estimate heartrates for each of the peaks that satisfy the thresholding criterion
        
-        hr <- mean(hr_vec,hr_initial_guess*(aliasedPeak$Npeaks+1)/(aliasedPeak$Npeaks))
+        hr <- mean(hr_vec)
         # Estimate the heartrate based on our initial guess, Npeaks and the estimated heartrates of the
         # peaks that satisfy the threshold
       
